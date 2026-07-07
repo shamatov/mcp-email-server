@@ -1,3 +1,5 @@
+import asyncio
+import time
 from collections.abc import Callable
 from datetime import datetime
 from email.utils import getaddresses
@@ -5,6 +7,8 @@ from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from mcp_email_server.config import (
     AccountAttributes,
@@ -13,6 +17,7 @@ from mcp_email_server.config import (
     get_settings,
     normalize_address,
 )
+from mcp_email_server.emails.classic import EmailClient
 from mcp_email_server.emails.dispatcher import dispatch_handler
 from mcp_email_server.emails.models import (
     AttachmentDownloadResponse,
@@ -105,6 +110,56 @@ class VisibilityAwareFastMCP(FastMCP):
 
 
 mcp = VisibilityAwareFastMCP("email")
+
+# /healthz: verify IMAP credentials actually work, not just that the process is up.
+# Results are cached so frequent polling (uptime checks) does not hammer the IMAP
+# servers with logins, which providers like Gmail may rate-limit or flag.
+HEALTHZ_CACHE_TTL_SECONDS = 300
+HEALTHZ_FAILURE_CACHE_TTL_SECONDS = 60  # recover faster after a fixed credential
+HEALTHZ_LOGIN_TIMEOUT_SECONDS = 15
+_healthz_cache: dict[str, Any] = {"expires": 0.0, "payload": None, "status_code": 200}
+
+
+async def _check_account_login(account: EmailSettings) -> str | None:
+    """Return None if IMAP login succeeds for the account, else the error message."""
+    try:
+        client = EmailClient(account.incoming)
+        await asyncio.wait_for(client.check_login(), timeout=HEALTHZ_LOGIN_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return f"timeout after {HEALTHZ_LOGIN_TIMEOUT_SECONDS}s"
+    except Exception as e:
+        return str(e) or type(e).__name__
+    return None
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> JSONResponse:
+    now = time.monotonic()
+    if _healthz_cache["payload"] is not None and now < _healthz_cache["expires"]:
+        return JSONResponse({**_healthz_cache["payload"], "cached": True}, status_code=_healthz_cache["status_code"])
+
+    settings = get_settings()
+    email_accounts = [account for account in settings.get_accounts() if isinstance(account, EmailSettings)]
+    errors = await asyncio.gather(*(_check_account_login(account) for account in email_accounts))
+
+    accounts = {
+        account.account_name: "ok" if error is None else f"error: {error}"
+        for account, error in zip(email_accounts, errors, strict=True)
+    }
+    healthy = all(error is None for error in errors)
+    payload = {
+        "status": "ok" if healthy else "unhealthy",
+        "read_only": settings.read_only,
+        "accounts": accounts,
+        "cached": False,
+    }
+    status_code = 200 if healthy else 503
+
+    _healthz_cache["payload"] = payload
+    _healthz_cache["status_code"] = status_code
+    ttl = HEALTHZ_CACHE_TTL_SECONDS if healthy else HEALTHZ_FAILURE_CACHE_TTL_SECONDS
+    _healthz_cache["expires"] = now + ttl
+    return JSONResponse(payload, status_code=status_code)
 
 
 @mcp.resource("email://{account_name}")

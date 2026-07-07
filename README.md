@@ -100,6 +100,16 @@ Set `MCP_EMAIL_SERVER_READ_ONLY=true` (or `read_only = true` in `config.toml`) t
 - Every mutating tool (`send_email`, `save_to_mailbox`, `delete_emails`, `move_emails`, `archive_emails`, `mark_emails_as_read`, `add_email_account`, and `get_emails_content` with `mark_as_read=true`) is hidden from tool listings **and** rejects direct calls with a `PermissionError` — hiding alone would not stop a client that calls a tool without listing it first.
 - Read paths open mailboxes with IMAP `EXAMINE` instead of `SELECT`, so the server session cannot change message flags even implicitly.
 
+### Health check
+
+HTTP transports expose `GET /healthz`, which attempts an IMAP login for every configured account and reports per-account status:
+
+```json
+{ "status": "ok", "read_only": true, "accounts": { "gmail-rav": "ok" }, "cached": false }
+```
+
+Returns `200` when every login succeeds, `503` otherwise. Results are cached (5 minutes for success, 1 minute for failure) so frequent polling does not hammer the IMAP servers with logins.
+
 ```json
 {
   "mcpServers": {

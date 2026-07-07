@@ -478,6 +478,21 @@ class EmailClient:
 
         return await EmailClient._prepare_imap_connection(imap, server)
 
+    async def check_login(self) -> None:
+        """Connect and authenticate to the IMAP server, raising on failure.
+
+        Used by the /healthz endpoint to verify that the stored credentials
+        still work, without touching any mailbox.
+        """
+        imap = await self._connect_imap()
+        try:
+            await _imap_login(imap, self.email_server.user_name, self.email_server.password.get_secret_value())
+        finally:
+            try:
+                await imap.logout()
+            except Exception as e:
+                logger.info(f"Error during logout: {e}")
+
     def _get_smtp_ssl_context(self) -> ssl.SSLContext | None:
         """Get SSL context for SMTP connections based on verify_ssl setting."""
         return _create_ssl_context(self.smtp_verify_ssl)
