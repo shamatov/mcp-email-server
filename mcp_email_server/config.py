@@ -278,6 +278,7 @@ class Settings(BaseSettings):
     providers: list[ProviderSettings] = []
     db_location: str = CONFIG_PATH.with_name("db.sqlite3").as_posix()
     enable_attachment_download: bool = False
+    read_only: bool = False
     allowed_recipients: list[str] = []
     allowed_senders: list[str] = []
 
@@ -287,11 +288,15 @@ class Settings(BaseSettings):
         """Initialize Settings with support for environment variables."""
         super().__init__(**data)
 
-        # Check for enable_attachment_download from environment variable
-        env_enable_attachment = os.getenv("MCP_EMAIL_SERVER_ENABLE_ATTACHMENT_DOWNLOAD")
-        if env_enable_attachment is not None:
-            self.enable_attachment_download = _parse_bool_env(env_enable_attachment, False)
-            logger.info(f"Set enable_attachment_download={self.enable_attachment_download} from environment variable")
+        # Boolean settings overridable from environment variables
+        for attr, env_name in (
+            ("enable_attachment_download", "MCP_EMAIL_SERVER_ENABLE_ATTACHMENT_DOWNLOAD"),
+            ("read_only", "MCP_EMAIL_SERVER_READ_ONLY"),
+        ):
+            env_value = os.getenv(env_name)
+            if env_value is not None:
+                setattr(self, attr, _parse_bool_env(env_value, False))
+                logger.info(f"Set {attr}={getattr(self, attr)} from environment variable")
 
         # Normalise allowed_recipients from TOML (bare, lowercased, de-duplicated)
         if self.allowed_recipients:
@@ -314,21 +319,24 @@ class Settings(BaseSettings):
         # Check for email configuration from environment variables
         env_email = EmailSettings.from_env()
         if env_email:
-            # Check if this account already exists (from TOML)
-            existing_account = None
-            for i, email in enumerate(self.emails):
-                if email.account_name == env_email.account_name:
-                    existing_account = i
-                    break
+            self._merge_env_email(env_email)
 
-            if existing_account is not None:
-                # Replace existing account with env configuration
-                self.emails[existing_account] = env_email
-                logger.info(f"Overriding email account '{env_email.account_name}' with environment variables")
-            else:
-                # Add new account from env
-                self.emails.insert(0, env_email)
-                logger.info(f"Added email account '{env_email.account_name}' from environment variables")
+    def _merge_env_email(self, env_email: EmailSettings) -> None:
+        """Add the env-defined account, replacing a TOML account with the same name."""
+        existing_account = None
+        for i, email in enumerate(self.emails):
+            if email.account_name == env_email.account_name:
+                existing_account = i
+                break
+
+        if existing_account is not None:
+            # Replace existing account with env configuration
+            self.emails[existing_account] = env_email
+            logger.info(f"Overriding email account '{env_email.account_name}' with environment variables")
+        else:
+            # Add new account from env
+            self.emails.insert(0, env_email)
+            logger.info(f"Added email account '{env_email.account_name}' from environment variables")
 
     def add_email(self, email: EmailSettings) -> None:
         """Use re-assigned for validation to work."""

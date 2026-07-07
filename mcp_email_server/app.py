@@ -29,6 +29,25 @@ def _has_send_capable_account() -> bool:
     return any(isinstance(account, EmailSettings) and account.can_send for account in settings.get_accounts())
 
 
+def _writes_enabled() -> bool:
+    return not get_settings().read_only
+
+
+def _send_tools_visible() -> bool:
+    return _writes_enabled() and _has_send_capable_account()
+
+
+def _enforce_writable(operation: str) -> None:
+    """Raise PermissionError when the server runs in read-only mode.
+
+    Hiding a tool from list_tools does not prevent a direct call_tool invocation,
+    so every mutating tool must also reject the call itself.
+    """
+    if get_settings().read_only:
+        msg = f"Server is in read-only mode (read_only=true): '{operation}' is disabled."
+        raise PermissionError(msg)
+
+
 def _has_allowed_recipients() -> bool:
     return bool(get_settings().allowed_recipients)
 
@@ -100,8 +119,12 @@ async def list_available_accounts() -> list[AccountAttributes]:
     return [account.masked() for account in settings.get_accounts()]
 
 
-@mcp.tool(description="Add a new email account configuration to the settings.")
+@mcp.tool(
+    description="Add a new email account configuration to the settings.",
+    visible_if=_writes_enabled,
+)
 async def add_email_account(email: EmailSettings) -> str:
+    _enforce_writable("add_email_account")
     settings = get_settings()
     settings.add_email(email)
     settings.store()
@@ -228,6 +251,8 @@ async def get_emails_content(
         ),
     ] = 20000,
 ) -> EmailContentBatchResponse:
+    if mark_as_read:
+        _enforce_writable("get_emails_content(mark_as_read=True)")
     handler = dispatch_handler(account_name)
     return await handler.get_emails_content(email_ids, mailbox, mark_as_read, body_offset, max_body_length)
 
@@ -256,7 +281,7 @@ async def list_allowed_senders() -> list[str]:
 
 @mcp.tool(
     description="Send an email using the specified account. Supports replying to emails with proper threading when in_reply_to is provided.",
-    visible_if=_has_send_capable_account,
+    visible_if=_send_tools_visible,
 )
 async def send_email(
     account_name: Annotated[str, Field(description="The name of the email account to send from.")],
@@ -304,6 +329,7 @@ async def send_email(
         ),
     ] = None,
 ) -> str:
+    _enforce_writable("send_email")
     _enforce_recipient_allowlist(recipients, cc, bcc)
     handler = dispatch_handler(account_name)
     await handler.send_email(
@@ -327,7 +353,7 @@ async def send_email(
     description="Compose an email and save it to an IMAP folder (e.g., Drafts). "
     "Same parameters as send_email, but saves instead of sending. "
     "Default folder is Drafts with \\Draft and \\Seen flags.",
-    visible_if=_has_send_capable_account,
+    visible_if=_send_tools_visible,
 )
 async def save_to_mailbox(
     account_name: Annotated[str, Field(description="The name of the email account.")],
@@ -382,6 +408,7 @@ async def save_to_mailbox(
         ),
     ] = None,
 ) -> str:
+    _enforce_writable("save_to_mailbox")
     _enforce_recipient_allowlist(recipients, cc, bcc)
     handler = dispatch_handler(account_name)
     result = await handler.save_to_mailbox(
@@ -405,7 +432,8 @@ async def save_to_mailbox(
 
 
 @mcp.tool(
-    description="Delete one or more emails by their email_id. Use list_emails_metadata first to get the email_id."
+    description="Delete one or more emails by their email_id. Use list_emails_metadata first to get the email_id.",
+    visible_if=_writes_enabled,
 )
 async def delete_emails(
     account_name: Annotated[str, Field(description="The name of the email account.")],
@@ -415,6 +443,7 @@ async def delete_emails(
     ],
     mailbox: Annotated[str, Field(default="INBOX", description="The mailbox to delete emails from.")] = "INBOX",
 ) -> str:
+    _enforce_writable("delete_emails")
     handler = dispatch_handler(account_name)
     deleted_ids, failed_ids = await handler.delete_emails(email_ids, mailbox)
 
@@ -425,7 +454,8 @@ async def delete_emails(
 
 
 @mcp.tool(
-    description="Mark one or more emails as read by their email_id. Use list_emails_metadata first to get the email_id."
+    description="Mark one or more emails as read by their email_id. Use list_emails_metadata first to get the email_id.",
+    visible_if=_writes_enabled,
 )
 async def mark_emails_as_read(
     account_name: Annotated[str, Field(description="The name of the email account.")],
@@ -435,6 +465,7 @@ async def mark_emails_as_read(
     ],
     mailbox: Annotated[str, Field(default="INBOX", description="The mailbox containing the emails.")] = "INBOX",
 ) -> str:
+    _enforce_writable("mark_emails_as_read")
     handler = dispatch_handler(account_name)
     marked_ids, failed_ids = await handler.mark_emails_as_read(email_ids, mailbox)
 
@@ -445,7 +476,8 @@ async def mark_emails_as_read(
 
 
 @mcp.tool(
-    description="Move one or more emails between IMAP folders by their email_id. Use list_emails_metadata first to get the email_id and list_mailboxes to discover available folders."
+    description="Move one or more emails between IMAP folders by their email_id. Use list_emails_metadata first to get the email_id and list_mailboxes to discover available folders.",
+    visible_if=_writes_enabled,
 )
 async def move_emails(
     account_name: Annotated[str, Field(description="The name of the email account.")],
@@ -458,6 +490,7 @@ async def move_emails(
         str, Field(default="INBOX", description="The source mailbox containing the emails.")
     ] = "INBOX",
 ) -> str:
+    _enforce_writable("move_emails")
     handler = dispatch_handler(account_name)
     moved_ids, failed_ids = await handler.move_emails(email_ids, source_mailbox, destination_mailbox)
 
@@ -470,7 +503,8 @@ async def move_emails(
 @mcp.tool(
     description="Archive one or more emails by moving them to the account's Archive folder, "
     "auto-detected via the RFC 6154 \\Archive flag (falling back to common names like Archive or "
-    "[Gmail]/All Mail). Use list_emails_metadata first to get the email_id."
+    "[Gmail]/All Mail). Use list_emails_metadata first to get the email_id.",
+    visible_if=_writes_enabled,
 )
 async def archive_emails(
     account_name: Annotated[str, Field(description="The name of the email account.")],
@@ -480,6 +514,7 @@ async def archive_emails(
     ],
     mailbox: Annotated[str, Field(default="INBOX", description="The source mailbox containing the emails.")] = "INBOX",
 ) -> str:
+    _enforce_writable("archive_emails")
     handler = dispatch_handler(account_name)
     archived_ids, failed_ids, archive_folder = await handler.archive_emails(email_ids, mailbox)
 

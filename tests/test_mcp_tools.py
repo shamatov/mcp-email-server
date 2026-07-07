@@ -64,6 +64,7 @@ class TestMcpTools:
 
         # Mock the get_settings function
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.get_accounts.return_value = [email_settings, provider_settings]
 
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -104,6 +105,7 @@ class TestMcpTools:
 
         # Mock the get_settings function
         mock_settings = MagicMock()
+        mock_settings.read_only = False
 
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
             # Call the function
@@ -390,6 +392,7 @@ class TestMcpTools:
             ),
         )
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.get_accounts.return_value = [read_only_account]
 
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -423,6 +426,7 @@ class TestMcpTools:
             ),
         )
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.get_accounts.return_value = [send_capable_account]
 
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -438,6 +442,7 @@ class TestMcpTools:
         mock_handler = AsyncMock()
 
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
             with patch("mcp_email_server.app.dispatch_handler", return_value=mock_handler):
@@ -563,6 +568,7 @@ class TestMcpTools:
     async def test_download_attachment_disabled(self):
         """Test download_attachment MCP tool when feature is disabled."""
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.enable_attachment_download = False
 
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -588,6 +594,7 @@ class TestMcpTools:
         )
 
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.enable_attachment_download = True
 
         mock_handler = AsyncMock()
@@ -619,6 +626,7 @@ class TestMcpTools:
         mock_handler.send_email = AsyncMock()
 
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
             with patch("mcp_email_server.app.dispatch_handler", return_value=mock_handler):
@@ -839,6 +847,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_recipients_hidden_when_unconfigured(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = []
         mock_settings.get_accounts.return_value = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -848,6 +857,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_recipients_visible_when_configured(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_settings.get_accounts.return_value = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -857,6 +867,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_recipients_returns_list(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com", "bob@example.com"]
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
             result = await list_allowed_recipients()
@@ -865,6 +876,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_send_email_no_allowlist_allows_any_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = []
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -876,6 +888,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_send_email_blocks_unlisted_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -887,6 +900,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_send_email_blocks_unlisted_bcc(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -904,6 +918,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_send_email_allows_listed_recipient_with_display_name(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -919,6 +934,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_save_to_mailbox_blocks_unlisted_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -930,6 +946,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_save_to_mailbox_allows_listed_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         mock_handler.save_to_mailbox.return_value = "<mid@example.com>|uid:42"
@@ -944,6 +961,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_send_email_blocks_packed_multi_address_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -960,6 +978,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_save_to_mailbox_blocks_packed_multi_address_recipient(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_recipients = ["alice@example.com"]
         mock_handler = AsyncMock()
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -976,6 +995,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_senders_hidden_when_unconfigured(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_senders = []
         mock_settings.get_accounts.return_value = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -985,6 +1005,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_senders_visible_when_configured(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_senders = ["*@example.com"]
         mock_settings.get_accounts.return_value = []
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
@@ -994,6 +1015,7 @@ class TestMcpTools:
     @pytest.mark.asyncio
     async def test_list_allowed_senders_returns_list(self):
         mock_settings = MagicMock()
+        mock_settings.read_only = False
         mock_settings.allowed_senders = ["*@example.com", "bob@example.com"]
         with patch("mcp_email_server.app.get_settings", return_value=mock_settings):
             result = await list_allowed_senders()

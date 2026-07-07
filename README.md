@@ -81,6 +81,7 @@ You can also configure the email server using environment variables, which is pa
 | `MCP_EMAIL_SERVER_SMTP_START_SSL`             | Enable STARTTLS                                        | `false`       | No       |
 | `MCP_EMAIL_SERVER_SMTP_VERIFY_SSL`            | Verify SSL certificates (disable for self-signed)      | `true`        | No       |
 | `MCP_EMAIL_SERVER_ENABLE_ATTACHMENT_DOWNLOAD` | Enable attachment download                             | `false`       | No       |
+| `MCP_EMAIL_SERVER_READ_ONLY`                  | Enforced read-only mode: reject all mutating tools     | `false`       | No       |
 | `MCP_EMAIL_SERVER_SAVE_TO_SENT`               | Save sent emails to IMAP Sent folder                   | `true`        | No       |
 | `MCP_EMAIL_SERVER_SENT_FOLDER_NAME`           | Custom Sent folder name (auto-detect if not set)       | -             | No       |
 | `MCP_EMAIL_SERVER_ALLOWED_RECIPIENTS`         | Recipient allowlist (comma-separated); empty = all     | -             | No       |
@@ -89,6 +90,15 @@ You can also configure the email server using environment variables, which is pa
 ### Read-only IMAP mode
 
 SMTP configuration is optional. When `MCP_EMAIL_SERVER_SMTP_HOST` is omitted, the account runs in read-only mode and exposes only read/mailbox-management tools. Outbound compose tools such as `send_email` and `save_to_mailbox` are hidden when every configured email account is read-only.
+
+Note that omitting SMTP only disables outbound compose tools. Mailbox-mutating tools that work over IMAP (`delete_emails`, `move_emails`, `archive_emails`, `mark_emails_as_read`) remain available. For a strict guarantee, use enforced read-only mode below.
+
+### Enforced read-only mode
+
+Set `MCP_EMAIL_SERVER_READ_ONLY=true` (or `read_only = true` in `config.toml`) to make the whole server strictly read-only:
+
+- Every mutating tool (`send_email`, `save_to_mailbox`, `delete_emails`, `move_emails`, `archive_emails`, `mark_emails_as_read`, `add_email_account`, and `get_emails_content` with `mark_as_read=true`) is hidden from tool listings **and** rejects direct calls with a `PermissionError` — hiding alone would not stop a client that calls a tool without listing it first.
+- Read paths open mailboxes with IMAP `EXAMINE` instead of `SELECT`, so the server session cannot change message flags even implicitly.
 
 ```json
 {

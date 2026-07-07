@@ -227,6 +227,16 @@ def _quote_mailbox(mailbox: str) -> str:
     return f'"{escaped}"'
 
 
+async def _open_mailbox(imap: aioimaplib.IMAP4 | aioimaplib.IMAP4_SSL, mailbox: str) -> Any:
+    """Open a mailbox for a read path: EXAMINE (read-only session) when the server
+    runs in read-only mode, SELECT otherwise. EXAMINE guarantees at the IMAP protocol
+    level that no flags are changed, even implicitly by the server."""
+    quoted = _quote_mailbox(mailbox)
+    if get_settings().read_only:
+        return await imap.examine(quoted)
+    return await imap.select(quoted)
+
+
 def _uid_sort_key(uid: bytes | str) -> int:
     """Return a numeric sort key for IMAP UIDs."""
     value = uid.decode() if isinstance(uid, bytes) else uid
@@ -897,7 +907,7 @@ class EmailClient:
             # Login and select mailbox
             await _imap_login(imap, self.email_server.user_name, self.email_server.password.get_secret_value())
             await _send_imap_id(imap)
-            select_response = await imap.select(_quote_mailbox(mailbox))
+            select_response = await _open_mailbox(imap, mailbox)
             _raise_for_imap_error(select_response, f"SELECT mailbox {mailbox}")
 
             search_criteria = self._build_search_criteria(
@@ -1068,7 +1078,7 @@ class EmailClient:
             # Login and select mailbox
             await _imap_login(imap, self.email_server.user_name, self.email_server.password.get_secret_value())
             await _send_imap_id(imap)
-            select_response = await imap.select(_quote_mailbox(mailbox))
+            select_response = await _open_mailbox(imap, mailbox)
             _raise_for_imap_error(select_response, f"SELECT mailbox {mailbox}")
 
             # Sender allowlist: check the From header BEFORE reading the body, so a blocked
@@ -1141,7 +1151,7 @@ class EmailClient:
         try:
             await _imap_login(imap, self.email_server.user_name, self.email_server.password.get_secret_value())
             await _send_imap_id(imap)
-            select_response = await imap.select(_quote_mailbox(mailbox))
+            select_response = await _open_mailbox(imap, mailbox)
             _raise_for_imap_error(select_response, f"SELECT mailbox {mailbox}")
 
             # Read-path allowlist: check the From header before fetching the body, so a
