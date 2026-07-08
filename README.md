@@ -130,8 +130,11 @@ Returns `200` when every login succeeds, `503` otherwise. Results are cached (5 
 
 HTTP transports (`sse` and `streamable-http`) validate request `Host` and `Origin` headers to protect against DNS rebinding attacks. Localhost is allowed by default. For Docker networks or reverse proxies, configure the expected service names explicitly.
 
+When `MCP_BEARER_TOKEN` is set, every HTTP endpoint (including `/healthz`) requires an `Authorization: Bearer <token>` header; requests without it get `401`. When unset, the server runs without authentication and logs a warning — only do this behind a trusted network boundary.
+
 | Variable                              | Description                                                      | Default           |
 | ------------------------------------- | ---------------------------------------------------------------- | ----------------- |
+| `MCP_BEARER_TOKEN`                    | Require `Authorization: Bearer <token>` on all HTTP endpoints    | off (no auth)     |
 | `MCP_HOST`                            | HTTP bind host for `streamable-http`                             | `localhost`       |
 | `MCP_PORT`                            | HTTP bind port for `streamable-http`                             | `9557`            |
 | `MCP_ALLOWED_HOSTS`                   | Comma-separated allowed `Host` values. Supports `host:*` ports   | Localhost hosts   |

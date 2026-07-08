@@ -1,10 +1,14 @@
 import os
 
 import typer
+import uvicorn
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.types import ASGIApp
 
 from mcp_email_server.app import mcp
 from mcp_email_server.config import delete_settings
+from mcp_email_server.http_auth import BearerAuthMiddleware
+from mcp_email_server.log import logger
 
 app = typer.Typer()
 
@@ -118,13 +122,24 @@ def stdio():
     mcp.run(transport="stdio")
 
 
+def _serve_http(http_app: ASGIApp, host: str, port: int) -> None:
+    """Run an HTTP transport app, wrapped in bearer auth when MCP_BEARER_TOKEN is set."""
+    token = os.environ.get("MCP_BEARER_TOKEN")
+    if token:
+        http_app = BearerAuthMiddleware(http_app, token)
+        logger.info("Bearer auth enabled for HTTP transport")
+    else:
+        logger.warning("MCP_BEARER_TOKEN is not set: HTTP transport runs WITHOUT authentication")
+    uvicorn.run(http_app, host=host, port=port)
+
+
 @app.command()
 def sse(
     host: str = "localhost",
     port: int = 9557,
 ):
     _configure_http_transport(host, port)
-    mcp.run(transport="sse")
+    _serve_http(mcp.sse_app(), host, port)
 
 
 @app.command()
@@ -133,7 +148,7 @@ def streamable_http(
     port: int = int(os.environ.get("MCP_PORT", 9557)),
 ):
     _configure_http_transport(host, port)
-    mcp.run(transport="streamable-http")
+    _serve_http(mcp.streamable_http_app(), host, port)
 
 
 @app.command()
