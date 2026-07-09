@@ -233,7 +233,14 @@ async def _open_mailbox(imap: aioimaplib.IMAP4 | aioimaplib.IMAP4_SSL, mailbox: 
     level that no flags are changed, even implicitly by the server."""
     quoted = _quote_mailbox(mailbox)
     if get_settings().read_only:
-        return await imap.examine(quoted)
+        response = await imap.examine(quoted)
+        # aioimaplib's examine() does not transition the connection to the SELECTED
+        # state the way select() does, so subsequent SEARCH/FETCH would be rejected
+        # client-side ("command SEARCH illegal in state AUTH"). EXAMINE is a SELECT
+        # variant per RFC 3501 6.3.2, so the transition is correct.
+        if response.result == "OK":
+            imap.protocol.state = aioimaplib.SELECTED
+        return response
     return await imap.select(quoted)
 
 

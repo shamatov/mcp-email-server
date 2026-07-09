@@ -150,10 +150,32 @@ class TestOpenMailbox:
     @pytest.mark.asyncio
     async def test_examine_used_in_read_only_mode(self):
         imap = AsyncMock()
+        imap.examine.return_value = MagicMock(result="OK")
         with patch("mcp_email_server.emails.classic.get_settings", return_value=MagicMock(read_only=True)):
             await _open_mailbox(imap, "INBOX")
         imap.examine.assert_awaited_once_with('"INBOX"')
         imap.select.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_examine_transitions_to_selected_state(self):
+        # aioimaplib's examine() does not set SELECTED itself; without this
+        # transition every subsequent SEARCH/FETCH fails client-side.
+        import aioimaplib
+
+        imap = AsyncMock()
+        imap.examine.return_value = MagicMock(result="OK")
+        with patch("mcp_email_server.emails.classic.get_settings", return_value=MagicMock(read_only=True)):
+            await _open_mailbox(imap, "INBOX")
+        assert imap.protocol.state == aioimaplib.SELECTED
+
+    @pytest.mark.asyncio
+    async def test_examine_failure_does_not_change_state(self):
+        imap = AsyncMock()
+        imap.protocol.state = "AUTH"
+        imap.examine.return_value = MagicMock(result="NO")
+        with patch("mcp_email_server.emails.classic.get_settings", return_value=MagicMock(read_only=True)):
+            await _open_mailbox(imap, "INBOX")
+        assert imap.protocol.state == "AUTH"
 
     @pytest.mark.asyncio
     async def test_select_used_in_writable_mode(self):
